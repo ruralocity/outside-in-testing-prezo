@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Outside-In Testing</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <style type="text/css">
+      @import url(http://fonts.googleapis.com/css?family=Bitter:400,700);
+      @import url(http://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Bitter'; }
+      h1 {
+        font-family: 'Bitter';
+        font-weight: bold;
+      }
+      h2, h3 {
+        font-family: 'Bitter';
+        font-weight: normal;
+      }
+      a { color: black; }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; font-size: 1.0em; }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: middle
+
+# Outside-In Testing
+
+## Aaron Sumner
+
+### @ruralocity
+
+---
+
+# How it works
+
+## Start with a high-level test
+## Write the code to make it pass
+## Drive out the details with low-level tests
+
+---
+
+# From the top
+
+## An **integration test** verifies that the different components making up your application work in concert to provide a complete, functioning feature.
+
+---
+
+# Remember last September?
+
+## `#kufball`
+
+---
+
+```ruby
+feature "JayTwittering" do
+  scenario "User sends a tweet" do
+    # Given I have an account
+    # And I log in
+
+    # When I enter a JayTweet
+    # And I click submit
+
+    # Then I should see "Your JayTweet has been posted."
+    # And I should see my JayTweet
+  end
+end
+```
+
+---
+
+## **Given** a set of conditions
+## **When** I do something
+## **Then** I should expect these results
+
+---
+
+```ruby
+feature 'JayTwittering' do
+  scenario 'User sends a tweet' do
+    @user = User.create(handle: 'rockchalk')
+    sign_in @user
+
+    fill_in 'New JayTweet',
+      with: "Let's go Hawks, beat CMU! #kufball"
+    click_button 'Submit Tweet'
+
+    expect(page).to have_content 'Your JayTweet has been posted.'
+    expect(page).to have_content "Let's go Hawks, beat CMU! #kufball"
+  end
+end
+```
+
+---
+
+```ruby
+feature 'Hashtags' do
+  scenario 'User views all JayTweets with a given hashtag' do
+    JayTweet.create(
+      message: "Meet us on the Hill for tailgating #kufball")
+    JayTweet.create(
+      message: "Let's hope #kufball actually wins one")
+    JayTweet.create(
+      message: "#kufball is my favorite sport!")
+    JayTweet.create(
+      message: "When's #kubball season start?")
+
+  visit '/tags/kufball'
+
+  expect(page).to have_content \
+    "Meet us on the Hill for tailgating #kufball"
+  # ...
+  expect(page).not_to have_content "When's #kubball season start?"
+  end
+end
+```
+
+---
+
+```ruby
+describe 'JayTweet API', type: :request do
+  JayTweet.create(
+    message: "Meet us on the Hill for tailgating #kufball")
+  JayTweet.create(
+    message: "Let's hope #kufball actually wins one")
+  JayTweet.create(
+    message: "#kufball is my favorite sport!")
+  JayTweet.create(
+    message: "When's #kubball season start?")
+
+  get '/api/hashtags/kufball', nil, \
+    {'HTTP_ACCEPT' => 'application/vnd.jaytweet.v1' }
+
+  expect(response).to be_success
+  json = JSON.parse(response.body)
+  expect(json['jaytweets'].length).to eq 3
+  # ...
+end
+```
+
+---
+
+# Drive out the details
+
+## A **unit test** tests an individual component's functionality in isolation from the rest of your application.
+
+---
+
+```ruby
+describe 'JayTweet' do
+  it "is valid at 140 characters" do
+    perfect_tweet = 'x' * 140
+    tweet = JayTweet.new(message: perfect_tweet)
+    expect(tweet).to be_valid
+  end
+
+  it "can't be longer than 140 characters" do
+    long_tweet = 'x' * 141
+    tweet = JayTweet.new(message: long_tweet)
+    expect(tweet).not_to be_valid
+  end
+
+  it "can't be blank" do
+    tweet = JayTweet.new(message: nil)
+    expect(tweet).not_to be_valid
+  end
+end
+```
+
+---
+
+```ruby
+describe 'JayTweet' do
+  it "includes the @handle in replies" do
+    user = User.new
+    user.handle = 'rockchalk'
+    tweet = JayTweet.reply_to(user,
+      message: "Save me a seat!")
+    expect(tweet).to eq '@rockchalk Save me a seat!'
+  end
+end
+```
+
+---
+
+# Mocks and stubs
+
+### Mocks simulate objects that interact with the object under test
+
+```ruby
+user = mock_model User
+```
+
+### Stubs override methods on mocks (or objects)
+
+```ruby
+user.stub(:handle) { 'rockchalk' }
+user.handle #=> "rockchalk"
+```
+
+---
+
+```ruby
+describe 'JayTweet' do
+  it "includes the @handle in replies" do
+    user = mock_model User
+    user.stub(:handle) { 'rockchalk' }
+    # or user = mock_model User, handle: 'rockchalk'
+    tweet = JayTweet.reply_to(user,
+      message: "Save me a seat!")
+    expect(tweet).to eq '@rockchalk Save me a seat!'
+  end
+end
+```
+
+---
+
+# When to drop from integration to unit?
+
+### Am I getting the feedback I need from my integration tests?
+### Do I need more details to debug an issue?
+### Would testing edge cases in integration tests be too expensive?
+
+---
+
+# Getting started
+
+### Pick some existing code to test; don't worry about TDD
+### Starting with small, unit tests worked best for me
+### Don't worry about mocks and stubs at first
+
+---
+
+# Tools for Ruby Testing
+
+### RSpec
+### Capybara
+### Factory Girl
+### Poltergeist/PhantomJS
+### VCR
+### Timecop
+
+---
+
+# Thanks!
+
+## Aaron Sumner
+## [@ruralocity](http://twitter.com/ruralocity)
+## [aaronsumner.com](http://aaronsumner.com/)
+
+Slides made with Remark <https://github.com/gnab/remark>
+
+![CC](images/cc.png)
+![BY](images/by.png)
+![NC](images/nc.png)
+![SA](images/sa.png)
+
+    </textarea>
+    <script src="http://gnab.github.io/remark/downloads/remark-latest.min.js" type="text/javascript">
+    </script>
+    <script type="text/javascript">
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
